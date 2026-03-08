@@ -1,4 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useAuth } from "./AuthContext";
+import Login from "./Login";
+import SelectOrganization from "./SelectOrganization";
+import OrganizationSwitcher from "./OrganizationSwitcher";
+import OrganizationUsers from "./OrganizationUsers";
+import Register from "./Register";
+import InvitesPanel from "./InvitesPanel";
+import ResetPassword from "./ResetPassword";
+
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -38,7 +47,9 @@ import {
 } from 'recharts';
 
 // Firebase imports
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { signOut, sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "./firebase";
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 
 const Tooltip = ({ children, text }) => {
@@ -63,11 +74,48 @@ const InfoIcon = ({ text }) => (
 );
 
 const App = () => {
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get("mode");
+  const oobCode = params.get("oobCode");
+
+  if(mode === "resetPassword" && oobCode){
+    return <ResetPassword oobCode={oobCode} />;
+  }
+	
+  const { user, orgId, role, memberships } = useAuth();
+  const [showRegister,setShowRegister] = useState(false);
+
+  const logout = async () => {
+	await signOut(auth);
+  };
+  
+  const changePassword = async () => {
+    if(!user?.email){
+      alert("Brak emaila użytkownika");
+      return;
+    }
+
+    try{
+      await sendPasswordResetEmail(auth, user.email, {
+        url: window.location.origin + "/reset-password",
+        handleCodeInApp: true
+      });
+	  
+      alert("Wysłano email do zmiany hasła");
+    }catch(err){
+
+      console.error(err);
+      alert("Błąd wysyłania emaila");
+     }
+  };
+
   const [activeTab, setActiveTab] = useState('miesieczny');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [editingItem, setEditingItem] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [initialized, setInitialized] = useState(false);
+  const [orgName, setOrgName] = useState("");
 
   // Walidacja - stany błędów
   const [monthError, setMonthError] = useState('');
@@ -76,6 +124,9 @@ const App = () => {
 
   const [categories, setCategories] = useState(['Sprzedaż Usług', 'Projekt X', 'Marketing', 'Edukacja', 'Inne']);
   const [newCategoryName, setNewCategoryName] = useState('');
+
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteError, setInviteError] = useState("");
 
   const [fixedCostsRegistry, setFixedCostsRegistry] = useState([
     { id: 'f1', category: 'Biuro', description: 'Główne biuro', amount: 3000 },
@@ -123,43 +174,65 @@ const App = () => {
   ];
 
   const currentQuarterIdx = Math.floor(selectedMonth / 3);
-
-  // ========== FIREBASE PERSISTENCE ==========
   
+  // ========== FIREBASE PERSISTENCE ==========
+
   // Ładowanie danych z Firestore
   useEffect(() => {
-    const loadDataFromFirestore = async () => {
-      try {
-        const docRef = doc(db, 'budgets', 'mainBudget');
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const firestoreData = docSnap.data();
-          if (firestoreData.data) setData(firestoreData.data);
-          if (firestoreData.categories) setCategories(firestoreData.categories);
-          if (firestoreData.fixedCostsRegistry) setFixedCostsRegistry(firestoreData.fixedCostsRegistry);
-          if (firestoreData.fixedCostOverrides) setFixedCostOverrides(firestoreData.fixedCostOverrides);
-        }
-      } catch (error) {
-        console.error('Błąd ładowania danych z Firestore:', error);
-      }
-    };
+    if(!orgId) return;
+    const docRef = doc(db,'organizations',orgId,'budgets',selectedYear.toString());
+    const unsub = onSnapshot(docRef, async (docSnap) => {
 
-    loadDataFromFirestore();
-  }, []);
+      if(docSnap.exists()){
+        const firestoreData = docSnap.data();
+        if (firestoreData.data) setData(firestoreData.data);
+        if (firestoreData.categories) setCategories(firestoreData.categories);
+        if (firestoreData.fixedCostsRegistry) setFixedCostsRegistry(firestoreData.fixedCostsRegistry);
+        if (firestoreData.fixedCostOverrides) setFixedCostOverrides(firestoreData.fixedCostOverrides);
+		setInitialized(true);
+      } else {
+
+        await setDoc(docRef,{
+          data: [],
+          categories: [],
+          fixedCostsRegistry: [],
+          fixedCostOverrides: {},
+          createdAt: new Date().toISOString()
+        });
+		setInitialized(true);
+      }
+    });
+    return () => unsub();
+  },[orgId]);
+
+  // Nazwa organizacji
+  useEffect(() => {
+	if (!orgId) return;
+
+	const orgRef = doc(db, "organizations", orgId);
+	const unsub = onSnapshot(orgRef, (snap) => {
+
+	  if (snap.exists()) {
+		setOrgName(snap.data().name);
+	  }
+	});
+
+	return () => unsub();
+  }, [orgId]);
 
   // Synchronizacja danych z Firestore przy każdej zmianie
   useEffect(() => {
     const saveDataToFirestore = async () => {
+	  if(!orgId || !initialized) return;
       try {
-        const docRef = doc(db, 'budgets', 'mainBudget');
+        const docRef = doc(db, 'organizations', orgId, 'budgets', selectedYear.toString());
         await setDoc(docRef, {
           data,
           categories,
           fixedCostsRegistry,
           fixedCostOverrides,
           lastUpdated: new Date().toISOString()
-        });
+		}, { merge: true });
       } catch (error) {
         console.error('Błąd zapisu danych do Firestore:', error);
       }
@@ -171,7 +244,7 @@ const App = () => {
     }, 1000);
 
     return () => clearTimeout(timeoutId);
-  }, [data, categories, fixedCostsRegistry, fixedCostOverrides]);
+  }, [data, categories, fixedCostsRegistry, fixedCostOverrides, orgId, initialized]);
 
   // ========== ULEPSZONE DRUKOWANIE ==========
   
@@ -308,6 +381,34 @@ const App = () => {
     setNewCategoryName('');
   };
 
+const inviteUser = async () => {
+
+  if(!inviteEmail){
+    setInviteError("Podaj email użytkownika");
+    return;
+  }
+
+  if(!inviteEmail.includes("@")){
+    setInviteError("Nieprawidłowy email");
+    return;
+  }
+
+  setInviteError("");
+
+  const inviteId = crypto.randomUUID();
+
+  await setDoc(doc(db,"invites",inviteId),{
+    email: inviteEmail,
+    orgId: orgId,
+    role: "user",
+    createdAt: new Date(),
+    used: false
+  });
+
+  setInviteEmail("");
+
+};
+
   const deleteMonthItem = (item) => {
     if (item.isFixed) {
       const overrideKey = `${item.id}-${selectedMonth}-${selectedYear}`;
@@ -351,12 +452,33 @@ const App = () => {
   };
 
   const yearlyChartData = useMemo(() => {
-    return months.map((m, idx) => {
+	return months.map((m, idx) => {
       const s = calculateStats(idx, selectedYear);
-      return { name: m.substring(0, 3), Zysk: s.wynikReal, Przychody: s.przychodyReal, Koszty: s.kosztyReal };
-    });
+	  return {
+		name: m.substring(0, 3),
+		Zysk: s.wynikReal,
+		Przychody: s.przychodyReal,
+		Koszty: s.kosztyReal
+      };
+	});
   }, [data, fixedCostsRegistry, fixedCostOverrides, selectedYear]);
 
+  // 🔐 LOGIN
+if (!user) {
+
+  if(showRegister){
+    return <Register onBack={()=>setShowRegister(false)} />;
+  }
+
+  return <Login onRegister={()=>setShowRegister(true)} />;
+
+}
+
+  // 🔐 WYBÓR ORGANIZACJI
+  if (!orgId && memberships.length > 1) {
+	return <SelectOrganization />;
+  }
+  
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-900">
       <style>{`
@@ -502,18 +624,25 @@ const App = () => {
             <p className="text-slate-500 text-sm font-medium uppercase tracking-widest">Budżet & Analiza Danych</p>
           </div>
           <div className="flex items-center gap-3">
+			<OrganizationSwitcher />
             <div className="flex bg-white rounded-xl shadow-sm border p-1">
               <button onClick={() => setActiveTab('miesieczny')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'miesieczny' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'}`}>Miesiąc</button>
               <button onClick={() => setActiveTab('kwartalny')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'kwartalny' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'}`}>Kwartał</button>
               <button onClick={() => setActiveTab('roczny')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'roczny' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'}`}>Rok</button>
               <button onClick={() => setActiveTab('ustawienia')} className={`px-4 py-2 rounded-lg text-sm transition-all ${activeTab === 'ustawienia' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'}`}><Settings size={16} /></button>
             </div>
+			<button
+			  onClick={logout}
+			  className="px-4 py-2 text-sm font-bold rounded-lg border hover:bg-slate-100 transition"
+			>
+			   Wyloguj
+			</button>
           </div>
         </header>
 
         {activeTab === 'ustawienia' ? (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4">
-              <section className="bg-white p-8 rounded-2xl shadow-sm border">
+			  <section className="bg-white p-8 rounded-2xl shadow-sm border">
                 <div className="flex items-center mb-6">
                   <h2 className="text-xl font-bold text-indigo-600 flex items-center gap-2">
                     <Settings size={20}/> Koszty Stałe
@@ -551,6 +680,7 @@ const App = () => {
                   ))}
                 </div>
               </section>
+			  
               <section className="bg-white p-8 rounded-2xl shadow-sm border">
                 <div className="flex items-center mb-6">
                   <h2 className="text-xl font-bold text-indigo-600 flex items-center gap-2">
@@ -576,6 +706,82 @@ const App = () => {
                   ))}
                 </div>
               </section>
+			  
+			  {role === "admin" && (
+			  <section className="bg-white p-8 rounded-2xl shadow-sm border">
+				<div className="flex items-center mb-6">
+				  <h2 className="text-xl font-bold text-indigo-600">
+					Zaproś użytkownika
+				  </h2>
+				</div>
+				<div className="space-y-3">
+				  <input
+					placeholder="Email użytkownika"
+					className="w-full p-2.5 rounded-lg border text-sm"
+					value={inviteEmail}
+					onChange={e=>setInviteEmail(e.target.value)}
+				  />
+				  {inviteError && (
+					<div className="text-red-500 text-sm text-center">
+					  {inviteError}
+					</div>
+				  )}
+				  <button
+					onClick={inviteUser}
+					className="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold"
+				  >
+					Zaproś użytkownika
+				  </button>
+				</div>
+			  </section>
+			  )}
+			  
+			  {role === "admin" && <InvitesPanel />}
+			  
+			  <OrganizationUsers />
+			  
+			  <section className="bg-white p-8 rounded-2xl shadow-sm border">
+				<div className="flex items-center mb-6">
+				  <h2 className="text-xl font-bold text-indigo-600">
+					Informacje o użytkowniku
+				  </h2>
+				</div>
+
+				<div className="space-y-3 text-sm">
+
+				  <div className="flex justify-between border-b pb-2">
+					<span className="text-slate-500">Email</span>
+					<span className="font-mono">{user?.email}</span>
+				  </div>
+
+				  <div className="flex justify-between border-b pb-2">
+					<span className="text-slate-500">Organizacja</span>
+					<span className="font-bold">{orgName || "ładowanie..."}</span>
+				  </div>
+
+				  <div className="flex justify-between">
+					<span className="text-slate-500">Rola</span>
+					<span className="font-bold">{role || "brak"}</span>
+				  </div>
+
+				  <div className="flex justify-between mt-4">
+					<button
+					  onClick={changePassword}
+					  className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-bold hover:bg-red-600"
+					>
+					  Zmień hasło
+					</button>
+
+					<button
+					  onClick={() => window.location.reload()}
+					  className="px-4 py-2 bg-slate-100 rounded-lg text-sm"
+					>
+					  Odśwież sesję
+					</button>
+				  </div>
+				</div>
+			  </section>
+ 
            </div>
         ) : activeTab === 'miesieczny' ? (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -794,7 +1000,7 @@ const App = () => {
                 })}
              </div>
 
-             <section className="bg-white p-8 rounded-3xl border shadow-sm">
+             <section className="bg-white p-8 rounded-3xl border shadow-sm min-w-0">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-lg font-bold flex items-center gap-2 text-indigo-600">
                     <PieChart size={20}/> Rentowność Kwartału
@@ -811,22 +1017,32 @@ const App = () => {
                     </div>
                   </div>
                 </div>
-                <div className="h-64">
-                   <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={quarters[currentQuarterIdx].months.map(mIdx => ({ name: months[mIdx], Przychody: calculateStats(mIdx, selectedYear).przychodyReal, Koszty: calculateStats(mIdx, selectedYear).kosztyReal }))}>
-                        <defs>
-                          <linearGradient id="colorP" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/><stop offset="95%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
-                          <linearGradient id="colorK" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" />
-                        <YAxis />
-                        <RechartsTooltip />
-                        <Area type="monotone" dataKey="Przychody" stroke="#10b981" fill="url(#colorP)" strokeWidth={2} />
-                        <Area type="monotone" dataKey="Koszty" stroke="#ef4444" fill="url(#colorK)" strokeWidth={2} />
-                      </AreaChart>
-                   </ResponsiveContainer>
-                </div>
+<div className="h-64 w-full min-w-0">
+  <ResponsiveContainer width="99%" height={250}>
+    <AreaChart data={quarters[currentQuarterIdx].months.map(mIdx => ({
+      name: months[mIdx],
+      Przychody: calculateStats(mIdx, selectedYear).przychodyReal,
+      Koszty: calculateStats(mIdx, selectedYear).kosztyReal
+    }))}>
+      <defs>
+        <linearGradient id="colorP" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+        </linearGradient>
+        <linearGradient id="colorK" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
+          <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+        </linearGradient>
+      </defs>
+      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+      <XAxis dataKey="name" />
+      <YAxis />
+      <RechartsTooltip />
+      <Area type="monotone" dataKey="Przychody" stroke="#10b981" fill="url(#colorP)" strokeWidth={2} />
+      <Area type="monotone" dataKey="Koszty" stroke="#ef4444" fill="url(#colorK)" strokeWidth={2} />
+    </AreaChart>
+  </ResponsiveContainer>
+</div>
              </section>
           </div>
         ) : (
@@ -916,26 +1132,26 @@ const App = () => {
                </div>
             </section>
 
-            <section className="bg-white p-8 rounded-3xl shadow-sm border">
+            <section className="bg-white p-8 rounded-3xl shadow-sm border min-w-0">
                <div className="flex justify-between items-start mb-8">
                   <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
                     <TrendingUp className="text-indigo-600" /> Analiza Trendu
                     <InfoIcon text="Wykres trendu zysku netto oraz przychodów v poszczególnych miesiącach." />
                   </h3>
                </div>
-               <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={yearlyChartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <RechartsTooltip />
-                    <Line type="monotone" dataKey="Zysk" stroke="#4f46e5" strokeWidth={4} dot={{ r: 6, fill: '#4f46e5', stroke: '#fff' }} />
-                    <Line type="monotone" dataKey="Przychody" stroke="#10b981" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-                    <Line type="monotone" dataKey="Koszty" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-                  </LineChart>
-                </ResponsiveContainer>
-               </div>
+<div className="h-80 w-full min-w-0">
+  <ResponsiveContainer width="99%" height={320}>
+    <LineChart data={yearlyChartData}>
+      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+      <XAxis dataKey="name" />
+      <YAxis />
+      <RechartsTooltip />
+      <Line type="monotone" dataKey="Zysk" stroke="#4f46e5" strokeWidth={4} dot={{ r: 6, fill: '#4f46e5', stroke: '#fff' }} />
+      <Line type="monotone" dataKey="Przychody" stroke="#10b981" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+      <Line type="monotone" dataKey="Koszty" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+    </LineChart>
+  </ResponsiveContainer>
+</div>
             </section>
           </div>
         )}

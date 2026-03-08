@@ -1,12 +1,9 @@
-console.log("🔥 FIREBASE FILE LOADED");
-console.log("ENV TEST:", import.meta.env);
-console.log("FIREBASE CONFIG:", {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID
-});
-
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+
+console.log("🔥 FIREBASE FILE LOADED");
+console.log("FIREBASE PROJECT:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -17,7 +14,11 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Prevent multiple initialization (React strict mode safe)
+if (!firebaseConfig.projectId) {
+  console.error("Firebase ENV variables are missing");
+}
+
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const db = getFirestore(app);
+export const auth = getAuth(app);
