@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "./AuthContext";
-import { db, auth } from "./firebase";
+import { useAuth } from "../../features/auth/AuthContext";
+import { db, auth } from "../../config/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
 export default function OrganizationSwitcher() {

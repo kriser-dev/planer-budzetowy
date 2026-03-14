@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { auth } from "./firebase";
+import { auth } from "../../config/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import AppLogo from "./AppLogo";
+import AppLogo from "../../components/ui/AppLogo";
 
 export default function Login({ onRegister }) {
 

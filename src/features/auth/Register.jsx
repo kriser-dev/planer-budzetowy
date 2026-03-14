@@ -1,7 +1,7 @@
-import AppLogo from "./AppLogo";
+import AppLogo from "../../components/ui/AppLogo";
 
 import { useState } from "react";
-import { auth } from "./firebase";
+import { auth } from "../../config/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 
 export default function Register({ onBack }) {

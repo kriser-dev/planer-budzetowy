@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { db } from "./firebase";
+import { db } from "../../config/firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { useAuth } from "./AuthContext";
-import AppLogo from "./AppLogo";
+import { useAuth } from "../../features/auth/AuthContext";
+import AppLogo from "../../components/ui/AppLogo";
 
 export default function SelectOrganization() {
 

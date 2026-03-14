@@ -1,77 +1,44 @@
-import { useAuth } from "./AuthContext";
-import Login from "./Login";
-import SelectOrganization from "./SelectOrganization";
-import OrganizationSwitcher from "./OrganizationSwitcher";
-import OrganizationUsers from "./OrganizationUsers";
-import Register from "./Register";
-import InvitesPanel from "./InvitesPanel";
-import ResetPassword from "./ResetPassword";
+import { useAuth } from "./features/auth/AuthContext";
+import Login from "./features/auth/Login";
+import SelectOrganization from "./components/organization/SelectOrganization";
+import OrganizationSwitcher from "./components/organization/OrganizationSwitcher";
+import Register from "./features/auth/Register";
+import ResetPassword from "./features/auth/ResetPassword";
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { 
-  Plus, 
-  Trash2, 
-  TrendingUp, 
-  Settings,
-  ChevronRight,
-  ChevronLeft,
-  CheckCircle2,
-  Clock,
-  X,
-  Save,
-  ExternalLink,
-  Pencil,
-  Printer,
-  Info,
-  List,
-  Download,
-  PieChart,
-  Link as LinkIcon,
-  Target,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
-  BarChart3,
-  AlertCircle
-} from 'lucide-react';
-import { 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip as RechartsTooltip, 
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  AreaChart,
-  Area
-} from 'recharts';
+import React, { useState, useMemo } from 'react';
+import { Settings, ChevronRight, ChevronLeft } from 'lucide-react';
 
 // Firebase imports
 import { signOut, sendPasswordResetEmail } from "firebase/auth";
-import { auth } from "./firebase";
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db } from './firebase';
+import { auth, db } from "./config/firebase";
+import { doc, setDoc } from 'firebase/firestore';
 
-const Tooltip = ({ children, text }) => {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative inline-flex items-center" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-      {children}
-      {show && (
-        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-white text-[10px] rounded shadow-xl whitespace-nowrap z-[100] animate-in fade-in zoom-in-95 font-medium">
-          {text}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
-        </div>
-      )}
-    </div>
-  );
-};
+// Importy komponentów
+import { ItemModal } from "./components/forms/ItemModal";
+import { MonthStatsCards } from './components/views/MonthStatsCards';
+import { MonthlyOperationsTable } from './components/views/MonthlyOperationsTable';
+import { SettingsView } from './components/views/SettingsView';
+import { QuarterlyView } from './components/views/QuarterlyView';
+import { YearlyView } from './components/views/YearlyView';
+import { ConfirmModal } from "./components/modals/ConfirmModal";
+import { CategoryMigrationModal } from "./components/modals/CategoryMigrationModal";
 
-const InfoIcon = ({ text }) => (
-  <Tooltip text={text}>
-    <Info size={14} className="text-slate-300 hover:text-indigo-500 cursor-help transition-colors ml-1.5" />
-  </Tooltip>
-);
+// Importy pomocniczych funkcji i stałych
+import { 
+  months, 
+  quarters, 
+  defaultCategories, 
+  defaultData, 
+  defaultFixedCosts, 
+  emptyNewItem, 
+  emptyNewFixedCost 
+} from './utils/constants';
+
+// Importy hooków
+import { useFirebaseSync } from './hooks/useFirebaseSync';
+
+// Importy funkcji pomocniczych
+import { generateYearlyChartData } from './utils/calculations';
 
 const App = () => {
   const params = new URLSearchParams(window.location.search);
@@ -83,7 +50,13 @@ const App = () => {
   }
 	
   const { user, orgId, role, memberships } = useAuth();
-  const [showRegister,setShowRegister] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  
+  const [modalMode,setModalMode] = useState(null);
+  const [modalItem,setModalItem] = useState(null);
+  
+  const [confirmData,setConfirmData] = useState(null);
+  const [categoryMigration,setCategoryMigration] = useState(null);
 
   const logout = async () => {
 	await signOut(auth);
@@ -103,16 +76,14 @@ const App = () => {
 	  
       alert("Wysłano email do zmiany hasła");
     }catch(err){
-
       console.error(err);
       alert("Błąd wysyłania emaila");
-     }
+    }
   };
 
   const [activeTab, setActiveTab] = useState('miesieczny');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [editingItem, setEditingItem] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [initialized, setInitialized] = useState(false);
   const [orgName, setOrgName] = useState("");
@@ -122,132 +93,37 @@ const App = () => {
   const [fixedCostError, setFixedCostError] = useState('');
   const [categoryError, setCategoryError] = useState('');
 
-  const [categories, setCategories] = useState(['Sprzedaż Usług', 'Projekt X', 'Marketing', 'Edukacja', 'Inne']);
+  const [categories, setCategories] = useState(defaultCategories);
   const [newCategoryName, setNewCategoryName] = useState('');
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteError, setInviteError] = useState("");
 
-  const [fixedCostsRegistry, setFixedCostsRegistry] = useState([
-    { id: 'f1', category: 'Biuro', description: 'Główne biuro', amount: 3000 },
-    { id: 'f2', category: 'Wynagrodzenia', description: 'Zespół dev', amount: 8000 },
-    { id: 'f3', category: 'Inne', description: 'Adobe, Slack, Github', amount: 500 }
-  ]);
-
+  const [fixedCostsRegistry, setFixedCostsRegistry] = useState(defaultFixedCosts);
   const [fixedCostOverrides, setFixedCostOverrides] = useState({});
-
-  const [data, setData] = useState([
-    { 
-      id: 1, 
-      category: 'Sprzedaż Usług', 
-      description: 'Przykładowa faktura', 
-      incomePlanned: 15000, 
-      incomeReal: 15500, 
-      expensePlanned: 200, 
-      expenseReal: 200, 
-      status: 'zrealizowane', 
-      month: 1, 
-      year: 2024, 
-      link: '' 
-    }
-  ]);
-
-  const [newItem, setNewItem] = useState({ 
-    category: '', 
-    description: '', 
-    incomePlanned: '', 
-    incomeReal: '', 
-    expensePlanned: '', 
-    expenseReal: '', 
-    status: 'planowane', 
-    link: '' 
-  });
-
-  const [newFixedCost, setNewFixedCost] = useState({ category: '', description: '', amount: '' });
-
-  const months = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'];
-  const quarters = [
-    { label: 'I Kwartał', months: [0, 1, 2] },
-    { label: 'II Kwartał', months: [3, 4, 5] },
-    { label: 'III Kwartał', months: [6, 7, 8] },
-    { label: 'IV Kwartał', months: [9, 10, 11] }
-  ];
+  const [data, setData] = useState(defaultData);
+  const [newFixedCost, setNewFixedCost] = useState(emptyNewFixedCost);
 
   const currentQuarterIdx = Math.floor(selectedMonth / 3);
   
-  // ========== FIREBASE PERSISTENCE ==========
+  // Firebase synchronizacja
+  useFirebaseSync({
+    orgId,
+    initialized,
+    setInitialized,
+    setData,
+    setCategories,
+    setFixedCostsRegistry,
+    setFixedCostOverrides,
+    setOrgName,
+    data,
+    categories,
+    fixedCostsRegistry,
+    fixedCostOverrides,
+    selectedYear
+  });
 
-  // Ładowanie danych z Firestore
-  useEffect(() => {
-    if(!orgId) return;
-    const docRef = doc(db,'organizations',orgId,'budgets',selectedYear.toString());
-    const unsub = onSnapshot(docRef, async (docSnap) => {
-
-      if(docSnap.exists()){
-        const firestoreData = docSnap.data();
-        if (firestoreData.data) setData(firestoreData.data);
-        if (firestoreData.categories) setCategories(firestoreData.categories);
-        if (firestoreData.fixedCostsRegistry) setFixedCostsRegistry(firestoreData.fixedCostsRegistry);
-        if (firestoreData.fixedCostOverrides) setFixedCostOverrides(firestoreData.fixedCostOverrides);
-		setInitialized(true);
-      } else {
-
-        await setDoc(docRef,{
-          data: [],
-          categories: [],
-          fixedCostsRegistry: [],
-          fixedCostOverrides: {},
-          createdAt: new Date().toISOString()
-        });
-		setInitialized(true);
-      }
-    });
-    return () => unsub();
-  },[orgId]);
-
-  // Nazwa organizacji
-  useEffect(() => {
-	if (!orgId) return;
-
-	const orgRef = doc(db, "organizations", orgId);
-	const unsub = onSnapshot(orgRef, (snap) => {
-
-	  if (snap.exists()) {
-		setOrgName(snap.data().name);
-	  }
-	});
-
-	return () => unsub();
-  }, [orgId]);
-
-  // Synchronizacja danych z Firestore przy każdej zmianie
-  useEffect(() => {
-    const saveDataToFirestore = async () => {
-	  if(!orgId || !initialized) return;
-      try {
-        const docRef = doc(db, 'organizations', orgId, 'budgets', selectedYear.toString());
-        await setDoc(docRef, {
-          data,
-          categories,
-          fixedCostsRegistry,
-          fixedCostOverrides,
-          lastUpdated: new Date().toISOString()
-		}, { merge: true });
-      } catch (error) {
-        console.error('Błąd zapisu danych do Firestore:', error);
-      }
-    };
-
-    // Debounce - zapisuj po 1 sekundzie od ostatniej zmiany
-    const timeoutId = setTimeout(() => {
-      saveDataToFirestore();
-    }, 1000);
-
-    return () => clearTimeout(timeoutId);
-  }, [data, categories, fixedCostsRegistry, fixedCostOverrides, orgId, initialized]);
-
-  // ========== ULEPSZONE DRUKOWANIE ==========
-  
+  // Drukowanie
   const handlePrint = () => {
     window.focus();
     setTimeout(() => {
@@ -255,6 +131,7 @@ const App = () => {
     }, 200);
   };
 
+  // Funkcje pomocnicze
   const getFixedCostsForMonth = (m, y) => {
     return fixedCostsRegistry.map(fc => {
       const overrideKey = `${fc.id}-${m}-${y}`;
@@ -332,34 +209,32 @@ const App = () => {
   }, [data, fixedCostsRegistry, fixedCostOverrides, selectedYear]);
 
   const addItem = () => {
-    // Walidacja
-    if (!newItem.category || !newItem.description) {
-      setMonthError('Pola Kategoria i Opis są obowiązkowe.');
-      return;
+
+  if (!modalItem.category || !modalItem.description) {
+    setMonthError('Pola Kategoria i Opis są obowiązkowe.');
+    return;
+  }
+
+  setMonthError('');
+
+  setData([
+    ...data,
+    {
+      id: Date.now(),
+      ...modalItem,
+      incomePlanned: parseFloat(modalItem.incomePlanned) || 0,
+      incomeReal: parseFloat(modalItem.incomeReal) || 0,
+      expensePlanned: parseFloat(modalItem.expensePlanned) || 0,
+      expenseReal: parseFloat(modalItem.expenseReal) || 0,
+      month: selectedMonth,
+      year: selectedYear
     }
-    
-    setMonthError('');
-    setData([...data, { 
-      id: Date.now(), 
-      ...newItem, 
-      incomePlanned: parseFloat(newItem.incomePlanned) || 0,
-      incomeReal: parseFloat(newItem.incomeReal) || 0,
-      expensePlanned: parseFloat(newItem.expensePlanned) || 0,
-      expenseReal: parseFloat(newItem.expenseReal) || 0,
-      month: selectedMonth, 
-      year: selectedYear 
-    }]);
-    setNewItem({ 
-      category: '', 
-      description: '', 
-      incomePlanned: '', 
-      incomeReal: '', 
-      expensePlanned: '', 
-      expenseReal: '', 
-      status: 'planowane', 
-      link: '' 
-    });
-  };
+  ]);
+
+  setModalMode(null);
+  setModalItem(null);
+
+};
 
   const addFixedCost = () => {
     if (!newFixedCost.category || !newFixedCost.description || !newFixedCost.amount) {
@@ -367,8 +242,12 @@ const App = () => {
       return;
     }
     setFixedCostError('');
-    setFixedCostsRegistry([...fixedCostsRegistry, { ...newFixedCost, id: `fc-${Date.now()}`, amount: parseFloat(newFixedCost.amount) }]);
-    setNewFixedCost({category:'', description:'', amount:''});
+    setFixedCostsRegistry([...fixedCostsRegistry, { 
+      ...newFixedCost, 
+      id: `fc-${Date.now()}`, 
+      amount: parseFloat(newFixedCost.amount) 
+    }]);
+    setNewFixedCost(emptyNewFixedCost);
   };
 
   const addCategory = () => {
@@ -381,33 +260,31 @@ const App = () => {
     setNewCategoryName('');
   };
 
-const inviteUser = async () => {
+  const inviteUser = async () => {
+    if(!inviteEmail){
+      setInviteError("Podaj email użytkownika");
+      return;
+    }
 
-  if(!inviteEmail){
-    setInviteError("Podaj email użytkownika");
-    return;
-  }
+    if(!inviteEmail.includes("@")){
+      setInviteError("Nieprawidłowy email");
+      return;
+    }
 
-  if(!inviteEmail.includes("@")){
-    setInviteError("Nieprawidłowy email");
-    return;
-  }
+    setInviteError("");
 
-  setInviteError("");
+    const inviteId = crypto.randomUUID();
 
-  const inviteId = crypto.randomUUID();
+    await setDoc(doc(db,"invites",inviteId),{
+      email: inviteEmail,
+      orgId: orgId,
+      role: "user",
+      createdAt: new Date(),
+      used: false
+    });
 
-  await setDoc(doc(db,"invites",inviteId),{
-    email: inviteEmail,
-    orgId: orgId,
-    role: "user",
-    createdAt: new Date(),
-    used: false
-  });
-
-  setInviteEmail("");
-
-};
+    setInviteEmail("");
+  };
 
   const deleteMonthItem = (item) => {
     if (item.isFixed) {
@@ -417,10 +294,87 @@ const inviteUser = async () => {
       setData(data.filter(d => d.id !== item.id));
     }
   };
+  
+const migrateCategory = (oldCategory,newCategory)=>{
 
-  const currentMonthData = useMemo(() => data.filter(item => item.month === selectedMonth && item.year === selectedYear), [data, selectedMonth, selectedYear]);
-  const currentMonthFixed = useMemo(() => getFixedCostsForMonth(selectedMonth, selectedYear), [fixedCostsRegistry, fixedCostOverrides, selectedMonth, selectedYear]);
-  const monthStats = useMemo(() => calculateStats(selectedMonth, selectedYear), [currentMonthData, currentMonthFixed]);
+  const opsCount = data.filter(d=>d.category===oldCategory).length;
+  const fixedCount = fixedCostsRegistry.filter(f=>f.category===oldCategory).length;
+
+  // migracja operacji
+  setData(
+    data.map(item =>
+      item.category === oldCategory
+        ? { ...item, category:newCategory }
+        : item
+    )
+  );
+
+  // migracja kosztów stałych
+  setFixedCostsRegistry(
+    fixedCostsRegistry.map(cost =>
+      cost.category === oldCategory
+        ? { ...cost, category:newCategory }
+        : cost
+    )
+  );
+
+  setCategoryMigration(null);
+
+  setConfirmData({
+    title:"Migracja zakończona",
+    message:`Przeniesiono ${opsCount} operacji i ${fixedCount} kosztów stałych.`,
+    type:"info"
+  });
+
+};
+
+const handleSaveEdit = () => {
+
+  if (modalItem.isFixed) {
+
+    setFixedCostOverrides({
+      ...fixedCostOverrides,
+      [`${modalItem.id}-${selectedMonth}-${selectedYear}`]: {
+        amount: parseFloat(modalItem.expenseReal),
+        deleted:false
+      }
+    });
+
+  } else {
+
+    setData(data.map(item =>
+      item.id === modalItem.id
+      ? {
+          ...modalItem,
+          incomePlanned: parseFloat(modalItem.incomePlanned) || 0,
+          incomeReal: parseFloat(modalItem.incomeReal) || 0,
+          expensePlanned: parseFloat(modalItem.expensePlanned) || 0,
+          expenseReal: parseFloat(modalItem.expenseReal) || 0
+        }
+      : item
+    ));
+
+  }
+
+  setModalMode(null);
+  setModalItem(null);
+
+};
+
+  const currentMonthData = useMemo(() => 
+    data.filter(item => item.month === selectedMonth && item.year === selectedYear), 
+    [data, selectedMonth, selectedYear]
+  );
+  
+  const currentMonthFixed = useMemo(() => 
+    getFixedCostsForMonth(selectedMonth, selectedYear), 
+    [fixedCostsRegistry, fixedCostOverrides, selectedMonth, selectedYear]
+  );
+  
+  const monthStats = useMemo(() => 
+    calculateStats(selectedMonth, selectedYear), 
+    [currentMonthData, currentMonthFixed]
+  );
 
   const filteredItems = useMemo(() => {
     const all = [...currentMonthFixed, ...currentMonthData];
@@ -451,30 +405,20 @@ const inviteUser = async () => {
     document.body.removeChild(link);
   };
 
-  const yearlyChartData = useMemo(() => {
-	return months.map((m, idx) => {
-      const s = calculateStats(idx, selectedYear);
-	  return {
-		name: m.substring(0, 3),
-		Zysk: s.wynikReal,
-		Przychody: s.przychodyReal,
-		Koszty: s.kosztyReal
-      };
-	});
-  }, [data, fixedCostsRegistry, fixedCostOverrides, selectedYear]);
+  const yearlyChartData = useMemo(() => 
+    generateYearlyChartData(months, data, fixedCostsRegistry, fixedCostOverrides, selectedYear),
+    [data, fixedCostsRegistry, fixedCostOverrides, selectedYear]
+  );
 
-  // 🔐 LOGIN
-if (!user) {
-
-  if(showRegister){
-    return <Register onBack={()=>setShowRegister(false)} />;
+  // Login
+  if (!user) {
+    if(showRegister){
+      return <Register onBack={() => setShowRegister(false)} />;
+    }
+    return <Login onRegister={() => setShowRegister(true)} />;
   }
 
-  return <Login onRegister={()=>setShowRegister(true)} />;
-
-}
-
-  // 🔐 WYBÓR ORGANIZACJI
+  // Wybór organizacji
   if (!orgId && memberships.length > 1) {
 	return <SelectOrganization />;
   }
@@ -555,81 +499,99 @@ if (!user) {
           </div>
           <div>
             <p style={{fontSize: '9px', color: '#4f46e5', fontWeight: 'bold'}}>Wynik (Real)</p>
-            <p style={{fontSize: '14px', fontWeight: 'bold', color: monthStats.wynikReal >= 0 ? '#10b981' : '#ef4444'}}>{monthStats.wynikReal.toLocaleString()} zł</p>
+            <p style={{fontSize: '14px', fontWeight: 'bold', color: monthStats.wynikReal >= 0 ? '#10b981' : '#ef4444'}}>
+              {monthStats.wynikReal.toLocaleString()} zł
+            </p>
           </div>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto">
-        {/* Modal edycji */}
-        {editingItem && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-slate-900 no-print">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6">
-              <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 className="font-bold text-lg">Edycja: {editingItem.category}</h3>
-                <button onClick={() => setEditingItem(null)} className="p-1 hover:bg-slate-100 rounded-full"><X size={20}/></button>
-              </div>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                     <label className="text-[10px] font-bold text-slate-400 uppercase">Opis</label>
-                     <input className="w-full p-2 border rounded-lg text-sm" value={editingItem.description} onChange={e => setEditingItem({...editingItem, description: e.target.value})} />
-                  </div>
-                  <div className="bg-emerald-50 p-3 rounded-xl space-y-2 border border-emerald-100">
-                    <label className="text-[10px] font-bold text-emerald-600 uppercase">Przychód (Plan)</label>
-                    <input type="number" className="w-full p-2 border rounded-lg text-sm" value={editingItem.incomePlanned} onChange={e => setEditingItem({...editingItem, incomePlanned: e.target.value})} />
-                    <label className="text-[10px] font-bold text-emerald-600 uppercase">Przychód (Real)</label>
-                    <input type="number" className="w-full p-2 border rounded-lg text-sm font-bold" value={editingItem.incomeReal} onChange={e => setEditingItem({...editingItem, incomeReal: e.target.value})} />
-                  </div>
-                  <div className="bg-red-50 p-3 rounded-xl space-y-2 border border-red-100">
-                    <label className="text-[10px] font-bold text-red-600 uppercase">Koszt (Plan)</label>
-                    <input type="number" className="w-full p-2 border rounded-lg text-sm" value={editingItem.expensePlanned} onChange={e => setEditingItem({...editingItem, expensePlanned: e.target.value})} />
-                    <label className="text-[10px] font-bold text-red-600 uppercase">Koszt (Real)</label>
-                    <input type="number" className="w-full p-2 border rounded-lg text-sm font-bold" value={editingItem.expenseReal} onChange={e => setEditingItem({...editingItem, expenseReal: e.target.value})} />
-                  </div>
-                </div>
-                {!editingItem.isFixed && (
-                   <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Status globalny:</label>
-                    <select className="flex-1 p-2 border rounded-lg text-sm" value={editingItem.status} onChange={e => setEditingItem({...editingItem, status: e.target.value})}>
-                      <option value="planowane">Planowane</option>
-                      <option value="zrealizowane">Zrealizowane</option>
-                    </select>
-                   </div>
-                )}
-                <button onClick={() => {
-                  if (editingItem.isFixed) {
-                    setFixedCostOverrides({...fixedCostOverrides, [`${editingItem.id}-${selectedMonth}-${selectedYear}`]: { amount: parseFloat(editingItem.expenseReal), deleted: false }});
-                  } else {
-                    setData(data.map(item => item.id === editingItem.id ? {
-                      ...editingItem, 
-                      incomePlanned: parseFloat(editingItem.incomePlanned) || 0,
-                      incomeReal: parseFloat(editingItem.incomeReal) || 0,
-                      expensePlanned: parseFloat(editingItem.expensePlanned) || 0,
-                      expenseReal: parseFloat(editingItem.expenseReal) || 0
-                    } : item));
-                  }
-                  setEditingItem(null);
-                }} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700">
-                  <Save size={18}/> Zapisz zmiany
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Modal wstawiania */}
+<ItemModal
+  mode={modalMode}
+  item={modalItem}
+  setItem={setModalItem}
+  categories={categories}
+  monthError={monthError}
+  onClose={()=>{
+    setModalMode(null);
+    setModalItem(null);
+  }}
+  onSave={()=>{
+    if(modalMode==="add"){
+      addItem();
+    }else{
+      handleSaveEdit();
+    }
+  }}
+/>
+
+{confirmData && (
+  <ConfirmModal
+    title={confirmData.title}
+    message={confirmData.message}
+	type={confirmData.type}
+	extraAction={confirmData.extraAction}
+    onConfirm={()=>{
+      confirmData.action?.();
+      setConfirmData(null);
+    }}
+    onCancel={()=>setConfirmData(null)}
+  />
+)}
+
+{categoryMigration && (
+  <CategoryMigrationModal
+    oldCategory={categoryMigration}
+    categories={categories}
+    onCancel={()=>setCategoryMigration(null)}
+    onMigrate={(target)=>migrateCategory(categoryMigration,target)}
+  />
+)}
 
         <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 no-print">
           <div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tighter">PLANER <span className="text-indigo-600">360°</span></h1>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tighter">
+              PLANER <span className="text-indigo-600">360°</span>
+            </h1>
             <p className="text-slate-500 text-sm font-medium uppercase tracking-widest">Budżet & Analiza Danych</p>
           </div>
           <div className="flex items-center gap-3">
 			<OrganizationSwitcher />
             <div className="flex bg-white rounded-xl shadow-sm border p-1">
-              <button onClick={() => setActiveTab('miesieczny')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'miesieczny' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'}`}>Miesiąc</button>
-              <button onClick={() => setActiveTab('kwartalny')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'kwartalny' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'}`}>Kwartał</button>
-              <button onClick={() => setActiveTab('roczny')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'roczny' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'}`}>Rok</button>
-              <button onClick={() => setActiveTab('ustawienia')} className={`px-4 py-2 rounded-lg text-sm transition-all ${activeTab === 'ustawienia' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'}`}><Settings size={16} /></button>
+              <button 
+                onClick={() => setActiveTab('miesieczny')} 
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'miesieczny' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'
+                }`}
+              >
+                Miesiąc
+              </button>
+              <button 
+                onClick={() => setActiveTab('kwartalny')} 
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'kwartalny' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'
+                }`}
+              >
+                Kwartał
+              </button>
+              <button 
+                onClick={() => setActiveTab('roczny')} 
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'roczny' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'
+                }`}
+              >
+                Rok
+              </button>
+              <button 
+                onClick={() => setActiveTab('ustawienia')} 
+                className={`px-4 py-2 rounded-lg text-sm transition-all ${
+                  activeTab === 'ustawienia' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'
+                }`}
+              >
+                <Settings size={16} />
+              </button>
             </div>
 			<button
 			  onClick={logout}
@@ -641,519 +603,108 @@ if (!user) {
         </header>
 
         {activeTab === 'ustawienia' ? (
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4">
-			  <section className="bg-white p-8 rounded-2xl shadow-sm border">
-                <div className="flex items-center mb-6">
-                  <h2 className="text-xl font-bold text-indigo-600 flex items-center gap-2">
-                    <Settings size={20}/> Koszty Stałe
-                    <InfoIcon text="Definiuj wydatki powtarzające się co miesiąc, jak czynsz czy subskrypcje." />
-                  </h2>
-                </div>
-                <div className="space-y-3">
-                  <select className="w-full p-2.5 rounded-lg border bg-slate-50 text-sm" value={newFixedCost.category} onChange={e => setNewFixedCost({...newFixedCost, category: e.target.value})}>
-                    <option value="">Wybierz kategorię...</option>
-                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                  <input placeholder="Opis (np. Numer faktury, Cel)" className="w-full p-2.5 rounded-lg border text-sm" value={newFixedCost.description} onChange={e => setNewFixedCost({...newFixedCost, description: e.target.value})} />
-                  <div className="flex gap-2">
-                    <input type="number" placeholder="Kwota" className="flex-1 p-2.5 rounded-lg border font-bold text-sm" value={newFixedCost.amount} onChange={e => setNewFixedCost({...newFixedCost, amount: e.target.value})} />
-                    <button onClick={addFixedCost} className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 transition-colors"><Plus size={20}/></button>
-                  </div>
-                  {fixedCostError && (
-                    <div className="flex items-center gap-2 text-red-500 text-[11px] font-bold animate-pulse">
-                      <AlertCircle size={14}/> {fixedCostError}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-6 space-y-2">
-                  {fixedCostsRegistry.map(cost => (
-                    <div key={cost.id} className="flex justify-between items-center p-3 border rounded-xl hover:bg-slate-50 transition-colors">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-700 text-sm">{cost.category}</span>
-                        <span className="text-[10px] text-slate-400">{cost.description}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-red-500">-{cost.amount.toLocaleString()} zł</span>
-                        <button onClick={() => setFixedCostsRegistry(fixedCostsRegistry.filter(f => f.id !== cost.id))} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-			  
-              <section className="bg-white p-8 rounded-2xl shadow-sm border">
-                <div className="flex items-center mb-6">
-                  <h2 className="text-xl font-bold text-indigo-600 flex items-center gap-2">
-                    <List size={20}/> Kategorie Wpisów
-                    <InfoIcon text="Zarządzaj listą kategorii dostępnych przy dodawaniu nowych operacji." />
-                  </h2>
-                </div>
-                <div className="flex gap-2 mb-2">
-                  <input placeholder="Nowa kategoria" className="flex-1 p-2.5 rounded-lg border text-sm" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} />
-                  <button onClick={addCategory} className="bg-indigo-600 text-white px-4 rounded-lg font-bold hover:bg-indigo-700 transition-colors">Dodaj</button>
-                </div>
-                {categoryError && (
-                    <div className="flex items-center gap-2 text-red-500 text-[11px] font-bold mb-4 animate-pulse">
-                      <AlertCircle size={14}/> {categoryError}
-                    </div>
-                )}
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  {categories.map(cat => (
-                    <div key={cat} className="flex justify-between p-2.5 border rounded-lg bg-slate-50">
-                      <span className="text-xs font-bold">{cat}</span>
-                      <button onClick={() => setCategories(categories.filter(c => c !== cat))} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-			  
-			  {role === "admin" && (
-			  <section className="bg-white p-8 rounded-2xl shadow-sm border">
-				<div className="flex items-center mb-6">
-				  <h2 className="text-xl font-bold text-indigo-600">
-					Zaproś użytkownika
-				  </h2>
-				</div>
-				<div className="space-y-3">
-				  <input
-					placeholder="Email użytkownika"
-					className="w-full p-2.5 rounded-lg border text-sm"
-					value={inviteEmail}
-					onChange={e=>setInviteEmail(e.target.value)}
-				  />
-				  {inviteError && (
-					<div className="text-red-500 text-sm text-center">
-					  {inviteError}
-					</div>
-				  )}
-				  <button
-					onClick={inviteUser}
-					className="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold"
-				  >
-					Zaproś użytkownika
-				  </button>
-				</div>
-			  </section>
-			  )}
-			  
-			  {role === "admin" && <InvitesPanel />}
-			  
-			  <OrganizationUsers />
-			  
-			  <section className="bg-white p-8 rounded-2xl shadow-sm border">
-				<div className="flex items-center mb-6">
-				  <h2 className="text-xl font-bold text-indigo-600">
-					Informacje o użytkowniku
-				  </h2>
-				</div>
-
-				<div className="space-y-3 text-sm">
-
-				  <div className="flex justify-between border-b pb-2">
-					<span className="text-slate-500">Email</span>
-					<span className="font-mono">{user?.email}</span>
-				  </div>
-
-				  <div className="flex justify-between border-b pb-2">
-					<span className="text-slate-500">Organizacja</span>
-					<span className="font-bold">{orgName || "ładowanie..."}</span>
-				  </div>
-
-				  <div className="flex justify-between">
-					<span className="text-slate-500">Rola</span>
-					<span className="font-bold">{role || "brak"}</span>
-				  </div>
-
-				  <div className="flex justify-between mt-4">
-					<button
-					  onClick={changePassword}
-					  className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-bold hover:bg-red-600"
-					>
-					  Zmień hasło
-					</button>
-
-					<button
-					  onClick={() => window.location.reload()}
-					  className="px-4 py-2 bg-slate-100 rounded-lg text-sm"
-					>
-					  Odśwież sesję
-					</button>
-				  </div>
-				</div>
-			  </section>
- 
-           </div>
+          <SettingsView 
+            role={role}
+            categories={categories}
+            newCategoryName={newCategoryName}
+            setNewCategoryName={setNewCategoryName}
+            categoryError={categoryError}
+            addCategory={addCategory}
+            setCategories={setCategories}
+            fixedCostsRegistry={fixedCostsRegistry}
+            newFixedCost={newFixedCost}
+            setNewFixedCost={setNewFixedCost}
+            fixedCostError={fixedCostError}
+            addFixedCost={addFixedCost}
+            setFixedCostsRegistry={setFixedCostsRegistry}
+            inviteEmail={inviteEmail}
+            setInviteEmail={setInviteEmail}
+            inviteError={inviteError}
+            inviteUser={inviteUser}
+            user={user}
+            orgName={orgName}
+            changePassword={changePassword}
+			data={data}
+			setConfirmData={setConfirmData}
+			setCategoryMigration={setCategoryMigration}
+          />
         ) : activeTab === 'miesieczny' ? (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <div className="lg:col-span-1 space-y-6">
               <section className="bg-white p-5 rounded-2xl shadow-sm border no-print space-y-5">
-                <div className="flex items-center justify-between">
-                  <button onClick={() => setSelectedMonth(prev => prev === 0 ? 11 : prev - 1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><ChevronLeft size={20} /></button>
-                  <div className="text-center font-bold">{months[selectedMonth]} {selectedYear}</div>
-                  <button onClick={() => setSelectedMonth(prev => prev === 11 ? 0 : prev + 1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><ChevronRight size={20} /></button>
-                </div>
+<div className="flex items-center justify-between">
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-widest border-b border-emerald-100 pb-1">
-                    <Wallet size={14} /> Realizacja (Faktyczne)
-                    <InfoIcon text="Podsumowanie rzeczywiście otrzymanych wpłat i poniesionych kosztów." />
-                  </div>
-                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                    <p className="text-[9px] text-emerald-700 font-bold uppercase mb-1">Bilans Rzeczywisty</p>
-                    <p className={`text-2xl font-black ${monthStats.wynikReal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{monthStats.wynikReal.toLocaleString()} zł</p>
-                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-emerald-100">
-                      <div>
-                        <p className="text-[8px] text-emerald-700 uppercase">Przychody</p>
-                        <p className="text-[11px] font-black">+{monthStats.przychodyReal.toLocaleString()} zł</p>
-                      </div>
-                      <div>
-                        <p className="text-[8px] text-emerald-700 uppercase">Koszty</p>
-                        <p className="text-[11px] font-black">-{monthStats.kosztyReal.toLocaleString()} zł</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+  <button 
+    onClick={() => changeMonth("prev")} 
+    className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+  >
+    <ChevronLeft size={20} />
+  </button>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest border-b border-indigo-100 pb-1">
-                    <Target size={14} /> Planowanie (Założenia)
-                    <InfoIcon text="Podsumowanie Twoich celów finansowych i przewidywanych wydatków." />
-                  </div>
-                  <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                    <p className="text-[9px] text-indigo-700 font-bold uppercase mb-1">Bilans Planowany</p>
-                    <p className={`text-2xl font-black ${monthStats.wynikPlan >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>{monthStats.wynikPlan.toLocaleString()} zł</p>
-                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-indigo-100">
-                      <div>
-                        <p className="text-[8px] text-indigo-700 uppercase">Przychody (P)</p>
-                        <p className="text-[11px] font-black">+{monthStats.przychodyPlan.toLocaleString()} zł</p>
-                      </div>
-                      <div>
-                        <p className="text-[8px] text-indigo-700 uppercase">Koszty (P)</p>
-                        <p className="text-[11px] font-black">-{monthStats.kosztyPlan.toLocaleString()} zł</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+  <div className="text-center font-bold">
+    {months[selectedMonth]} {selectedYear}
+  </div>
 
-                <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t">
-                  <button onClick={handlePrint} className="flex items-center justify-center gap-2 p-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold transition-colors"><Printer size={16} /> PDF</button>
-                  <button onClick={handleExportCSV} className="flex items-center justify-center gap-2 p-3 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold transition-colors"><Download size={16} /> Excel</button>
-                </div>
+  <button 
+    onClick={() => changeMonth("next")} 
+    className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+  >
+    <ChevronRight size={20} />
+  </button>
+
+</div>
+
+                <MonthStatsCards monthStats={monthStats} />
               </section>
 
-              <section className="bg-white p-6 rounded-2xl shadow-sm border no-print">
-                <div className="flex items-center mb-4 border-b pb-2">
-                  <h3 className="font-bold text-[10px] uppercase text-slate-400 tracking-widest">Nowy Wpis (Hybrydowy)</h3>
-                  <InfoIcon text="Dodaj nową operację finansową. Możesz określić plan i realizację osobno." />
-                </div>
-                <div className="space-y-3">
-                  <select className={`w-full p-2.5 rounded-lg border bg-slate-50 text-sm transition-colors ${monthError && !newItem.category ? 'border-red-300' : ''}`} value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})}>
-                    <option value="">Wybierz kategorię...</option>
-                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                  <input placeholder="Opis wpisu" className={`w-full p-2.5 rounded-lg border bg-slate-50 text-sm transition-colors ${monthError && !newItem.description ? 'border-red-300' : ''}`} value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} />
-                  
-                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 space-y-2">
-                    <p className="text-[9px] font-bold text-emerald-700 uppercase">Sekcja Przychodu</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="number" placeholder="Plan" className="p-2 rounded border text-xs" value={newItem.incomePlanned} onChange={e => setNewItem({...newItem, incomePlanned: e.target.value})} />
-                      <input type="number" placeholder="Realizacja" className="p-2 rounded border text-xs font-bold" value={newItem.incomeReal} onChange={e => setNewItem({...newItem, incomeReal: e.target.value})} />
-                    </div>
-                  </div>
+<button
+  onClick={()=>{
+    setModalMode("add");
+    setModalItem({...emptyNewItem});
+  }}
+  className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition"
+>
+  Dodaj wpis
+</button>
 
-                  <div className="p-3 bg-red-50 rounded-xl border border-red-100 space-y-2">
-                    <p className="text-[9px] font-bold text-red-700 uppercase">Sekcja Kosztu</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="number" placeholder="Plan" className="p-2 rounded border text-xs" value={newItem.expensePlanned} onChange={e => setNewItem({...newItem, expensePlanned: e.target.value})} />
-                      <input type="number" placeholder="Realizacja" className="p-2 rounded border text-xs font-bold" value={newItem.expenseReal} onChange={e => setNewItem({...newItem, expenseReal: e.target.value})} />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="bg-slate-50 p-2 border rounded text-slate-400"><LinkIcon size={14} /></div>
-                    <input placeholder="Link URL" className="flex-1 p-2 rounded border bg-slate-50 text-xs" value={newItem.link} onChange={e => setNewItem({...newItem, link: e.target.value})} />
-                  </div>
-
-                  <button onClick={addItem} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md mt-2"><Plus size={18} className="inline mr-2" /> Dodaj wpis</button>
-                  
-                  {monthError && (
-                    <div className="flex items-center gap-2 text-red-500 text-[11px] font-bold text-center justify-center animate-pulse">
-                      <AlertCircle size={14}/> {monthError}
-                    </div>
-                  )}
-                </div>
-              </section>
             </div>
 
             <div className="lg:col-span-3">
-              <section className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                <div className="px-6 py-4 border-b flex flex-col sm:flex-row justify-between items-center gap-4 no-print">
-                  <div className="flex items-center">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                      <List size={18} /> Rejestr Operacji
-                      <InfoIcon text="Pełna lista transakcji w wybranym miesiącu, w tym koszty stałe i zmienne." />
-                    </h3>
-                  </div>
-                  <div className="flex bg-slate-100 p-1 rounded-xl">
-                    {['all', 'planowane', 'zrealizowane'].map(f => (
-                      <button key={f} onClick={() => setStatusFilter(f)} className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${statusFilter === f ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>
-                        {f === 'all' ? 'Wszystkie' : f === 'planowane' ? 'W trakcie' : 'Zakończone'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto print-container">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50/80 border-b text-slate-400 text-[9px] font-black uppercase tracking-widest">
-                      <tr>
-                        <th className="px-4 py-4 no-print">S</th>
-                        <th className="px-4 py-4">Pozycja</th>
-                        <th className="px-4 py-4 bg-emerald-50/50 text-emerald-700">Przychód (P)</th>
-                        <th className="px-4 py-4 bg-emerald-100/50 text-emerald-800">Przychód (R)</th>
-                        <th className="px-4 py-4 bg-red-50/50 text-red-700">Koszt (P)</th>
-                        <th className="px-4 py-4 bg-red-100/50 text-red-800">Koszt (R)</th>
-                        <th className="px-4 py-4 text-right no-print">Opcje</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredItems.map((item, idx) => (
-                        <tr key={item.id || idx} className={`group ${item.isFixed ? 'bg-indigo-50/20' : 'hover:bg-slate-50'}`}>
-                          <td className="px-4 py-4 no-print">
-                            {item.status === 'zrealizowane' ? <CheckCircle2 size={16} className="text-emerald-500"/> : <Clock size={16} className="text-amber-500"/>}
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold">{item.category}</span>
-                              {item.link && (
-                                <a href={item.link.startsWith('http') ? item.link : `https://${item.link}`} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 no-print">
-                                  <ExternalLink size={12} />
-                                </a>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-slate-400 truncate max-w-[150px]">{item.description}</p>
-                          </td>
-                          <td className="px-4 py-4 text-slate-400 font-mono">{(item.incomePlanned || 0).toLocaleString()} zł</td>
-                          <td className="px-4 py-4 font-mono font-bold text-emerald-600 bg-emerald-50/20">{(item.incomeReal || 0).toLocaleString()} zł</td>
-                          <td className="px-4 py-4 text-slate-400 font-mono">{(item.expensePlanned || 0).toLocaleString()} zł</td>
-                          <td className="px-4 py-4 font-mono font-bold text-red-500 bg-red-50/20">{(item.expenseReal || 0).toLocaleString()} zł</td>
-                          <td className="px-4 py-4 text-right no-print">
-                            <div className="flex justify-end gap-1">
-                              <button onClick={() => setEditingItem(item)} className="p-2 text-slate-300 hover:text-indigo-600"><Pencil size={14}/></button>
-                              <button onClick={() => deleteMonthItem(item)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={14}/></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+<MonthlyOperationsTable 
+  filteredItems={filteredItems}
+  statusFilter={statusFilter}
+  setStatusFilter={setStatusFilter}
+  setEditingItem={(item)=>{
+    setModalMode("edit");
+    setModalItem(item);
+  }}
+  deleteMonthItem={deleteMonthItem}
+  setConfirmData={setConfirmData}
+  handleExportCSV={handleExportCSV}
+  months={months}
+  selectedMonth={selectedMonth}
+  selectedYear={selectedYear}
+/>
             </div>
           </div>
         ) : activeTab === 'kwartalny' ? (
-          <div className="space-y-6 animate-in fade-in">
-             <div className="flex justify-between items-center no-print">
-                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                  {quarters[currentQuarterIdx].label} {selectedYear}
-                  <InfoIcon text="Zbiorcze zestawienie wyników dla bieżącego kwartału z podziałem na plan i realizację." />
-                </h2>
-                <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-md transition-colors hover:bg-indigo-700"><Printer size={16} /> Pobierz PDF</button>
-             </div>
-             
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {quarters[currentQuarterIdx].months.map((mIdx) => {
-                  const s = calculateStats(mIdx, selectedYear);
-                  return (
-                    <div key={mIdx} className="bg-white p-6 rounded-2xl border shadow-sm space-y-4">
-                      <h4 className="font-bold text-slate-400 uppercase text-[10px] mb-2 tracking-widest border-b pb-2">{months[mIdx]}</h4>
-                      <div className="space-y-3">
-                        <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
-                           <div className="flex justify-between items-center mb-1">
-                             <span className="text-[10px] font-bold text-emerald-700 uppercase">Przychody</span>
-                             <span className="text-[9px] text-emerald-600/60 font-medium">REAL vs PLAN</span>
-                           </div>
-                           <div className="flex justify-between items-baseline">
-                             <span className="text-lg font-black text-emerald-600">+{s.przychodyReal.toLocaleString()}</span>
-                             <span className="text-xs text-emerald-400 font-mono">{s.przychodyPlan.toLocaleString()}</span>
-                           </div>
-                        </div>
-
-                        <div className="p-3 bg-red-50/50 rounded-xl border border-red-100">
-                           <div className="flex justify-between items-center mb-1">
-                             <span className="text-[10px] font-bold text-red-700 uppercase">Koszty</span>
-                             <span className="text-[9px] text-red-600/60 font-medium">REAL vs PLAN</span>
-                           </div>
-                           <div className="flex justify-between items-baseline">
-                             <span className="text-lg font-black text-red-500">-{s.kosztyReal.toLocaleString()}</span>
-                             <span className="text-xs text-red-400 font-mono">{s.kosztyPlan.toLocaleString()}</span>
-                           </div>
-                        </div>
-
-                        <div className="pt-2 flex justify-between items-center">
-                          <span className="font-bold uppercase text-[9px] text-slate-400">Zysk</span>
-                          <span className={`text-xl font-black ${s.wynikReal >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>{s.wynikReal.toLocaleString()} zł</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-             </div>
-
-             <section className="bg-white p-8 rounded-3xl border shadow-sm min-w-0">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold flex items-center gap-2 text-indigo-600">
-                    <PieChart size={20}/> Rentowność Kwartału
-                    <InfoIcon text="Graficzne przedstawienie relacji przychodów do kosztów w skali kwartału." />
-                  </h3>
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                       <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                       <span className="text-[10px] font-bold uppercase text-slate-400">Przychody Real</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                       <span className="text-[10px] font-bold uppercase text-slate-400">Koszty Real</span>
-                    </div>
-                  </div>
-                </div>
-<div className="h-64 w-full min-w-0">
-  <ResponsiveContainer width="99%" height={250}>
-    <AreaChart data={quarters[currentQuarterIdx].months.map(mIdx => ({
-      name: months[mIdx],
-      Przychody: calculateStats(mIdx, selectedYear).przychodyReal,
-      Koszty: calculateStats(mIdx, selectedYear).kosztyReal
-    }))}>
-      <defs>
-        <linearGradient id="colorP" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-        </linearGradient>
-        <linearGradient id="colorK" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
-          <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-        </linearGradient>
-      </defs>
-      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-      <XAxis dataKey="name" />
-      <YAxis />
-      <RechartsTooltip />
-      <Area type="monotone" dataKey="Przychody" stroke="#10b981" fill="url(#colorP)" strokeWidth={2} />
-      <Area type="monotone" dataKey="Koszty" stroke="#ef4444" fill="url(#colorK)" strokeWidth={2} />
-    </AreaChart>
-  </ResponsiveContainer>
-</div>
-             </section>
-          </div>
+          <QuarterlyView 
+            quarters={quarters}
+            currentQuarterIdx={currentQuarterIdx}
+            selectedYear={selectedYear}
+            months={months}
+            calculateStats={calculateStats}
+            handlePrint={handlePrint}
+          />
         ) : (
-          <div className="space-y-8 animate-in fade-in">
-            <div className="flex justify-between items-center no-print">
-                <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                  Podsumowanie Roku {selectedYear}
-                  <InfoIcon text="Kompleksowy widok rentowności Twojej firmy w przekroju całego roku z podziałem na kwartały." />
-                </h2>
-                <div className="flex gap-2">
-                  <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-md transition-colors hover:bg-indigo-700"><Printer size={16} /> Pobierz PDF</button>
-                </div>
-             </div>
-
-            {/* Sekcja: Kwoty Roczne */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-               <div className="bg-white p-6 rounded-2xl border shadow-sm">
-                  <p className="text-[10px] font-black text-emerald-600 uppercase mb-1 flex items-center gap-1"><ArrowUpRight size={14}/> Przychody Roczne</p>
-                  <div className="space-y-1">
-                    <p className="text-2xl font-black">{yearlyStats.przychodyReal.toLocaleString()} zł</p>
-                    <p className="text-xs text-slate-400 font-mono">Cel: {yearlyStats.przychodyPlan.toLocaleString()} zł</p>
-                  </div>
-               </div>
-               <div className="bg-white p-6 rounded-2xl border shadow-sm">
-                  <p className="text-[10px] font-black text-red-500 uppercase mb-1 flex items-center gap-1"><ArrowDownRight size={14}/> Koszty Roczne</p>
-                  <div className="space-y-1">
-                    <p className="text-2xl font-black">{yearlyStats.kosztyReal.toLocaleString()} zł</p>
-                    <p className="text-xs text-slate-400 font-mono">Plan: {yearlyStats.kosztyPlan.toLocaleString()} zł</p>
-                  </div>
-               </div>
-               <div className="bg-indigo-600 p-6 rounded-2xl border border-indigo-500 shadow-sm text-white">
-                  <p className="text-[10px] font-black text-indigo-200 uppercase mb-1">Zysk (Realny)</p>
-                  <div className="space-y-1">
-                    <p className="text-2xl font-black">{yearlyStats.wynikReal.toLocaleString()} zł</p>
-                    <p className="text-xs text-indigo-300 font-mono">Śr. m-c: {(yearlyStats.wynikReal / 12).toFixed(0).toLocaleString()} zł</p>
-                  </div>
-               </div>
-               <div className="bg-white p-6 rounded-2xl border shadow-sm border-indigo-100">
-                  <p className="text-[10px] font-black text-indigo-400 uppercase mb-1">Zysk (Planowany)</p>
-                  <div className="space-y-1">
-                    <p className="text-2xl font-black text-slate-800">{yearlyStats.wynikPlan.toLocaleString()} zł</p>
-                    <p className="text-xs text-slate-400 font-mono">Realizacja: {((yearlyStats.wynikReal / (yearlyStats.wynikPlan || 1)) * 100).toFixed(1)}%</p>
-                  </div>
-               </div>
-            </div>
-
-            {/* Sekcja: Zestawienie Kwartalne */}
-            <section className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-               <div className="px-6 py-4 border-b flex items-center justify-between">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <BarChart3 size={18} className="text-indigo-600" /> Dane Kwartalne
-                    <InfoIcon text="Podsumowanie finansowe podzielone na cztery kwartały roku." />
-                  </h3>
-               </div>
-               <div className="overflow-x-auto">
-                 <table className="w-full text-left text-sm">
-                   <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-widest">
-                     <tr>
-                       <th className="px-6 py-4">Kwartał</th>
-                       <th className="px-6 py-4">Przychody (P)</th>
-                       <th className="px-6 py-4">Przychody (R)</th>
-                       <th className="px-6 py-4">Koszty (P)</th>
-                       <th className="px-6 py-4">Koszty (R)</th>
-                       <th className="px-6 py-4 text-right">Zysk (R)</th>
-                     </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100">
-                     {quarters.map((q, idx) => {
-                       const qs = calculateQuarterStats(idx, selectedYear);
-                       return (
-                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                           <td className="px-6 py-4 font-bold text-slate-700">{q.label}</td>
-                           <td className="px-6 py-4 text-slate-400 font-mono">{qs.przychodyPlan.toLocaleString()} zł</td>
-                           <td className="px-6 py-4 text-emerald-600 font-bold font-mono">+{qs.przychodyReal.toLocaleString()} zł</td>
-                           <td className="px-6 py-4 text-slate-400 font-mono">{qs.kosztyPlan.toLocaleString()} zł</td>
-                           <td className="px-6 py-4 text-red-500 font-bold font-mono">-{qs.kosztyReal.toLocaleString()} zł</td>
-                           <td className="px-6 py-4 text-right">
-                             <span className={`inline-block px-3 py-1 rounded-full font-black text-xs ${qs.wynikReal >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                               {qs.wynikReal.toLocaleString()} zł
-                             </span>
-                           </td>
-                         </tr>
-                       );
-                     })}
-                   </tbody>
-                 </table>
-               </div>
-            </section>
-
-            <section className="bg-white p-8 rounded-3xl shadow-sm border min-w-0">
-               <div className="flex justify-between items-start mb-8">
-                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
-                    <TrendingUp className="text-indigo-600" /> Analiza Trendu
-                    <InfoIcon text="Wykres trendu zysku netto oraz przychodów v poszczególnych miesiącach." />
-                  </h3>
-               </div>
-<div className="h-80 w-full min-w-0">
-  <ResponsiveContainer width="99%" height={320}>
-    <LineChart data={yearlyChartData}>
-      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-      <XAxis dataKey="name" />
-      <YAxis />
-      <RechartsTooltip />
-      <Line type="monotone" dataKey="Zysk" stroke="#4f46e5" strokeWidth={4} dot={{ r: 6, fill: '#4f46e5', stroke: '#fff' }} />
-      <Line type="monotone" dataKey="Przychody" stroke="#10b981" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-      <Line type="monotone" dataKey="Koszty" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-    </LineChart>
-  </ResponsiveContainer>
-</div>
-            </section>
-          </div>
+          <YearlyView 
+            selectedYear={selectedYear}
+            yearlyStats={yearlyStats}
+            quarters={quarters}
+            calculateQuarterStats={calculateQuarterStats}
+            yearlyChartData={yearlyChartData}
+            handlePrint={handlePrint}
+          />
         )}
       </div>
     </div>
