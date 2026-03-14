@@ -60,7 +60,9 @@ export const emptyNewItem = {
   endPlanned: "",
   startReal: "",
   endReal: "",
-  teamSize: 1  
+  teamSize: 1,
+  assignee: "",
+  progress: 0
 };
 
 // Pusty nowy koszt stały

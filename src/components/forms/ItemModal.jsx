@@ -14,6 +14,7 @@ export const ItemModal = ({
   if (!item) return null;
 
   const isEdit = mode === "edit";
+  const ganttOnly = isEdit && item?.gantt;
 
   return (
     <div
@@ -42,6 +43,8 @@ export const ItemModal = ({
 		  }}
 		>
 
+{!ganttOnly && (
+<>
           <select
             className="w-full p-2.5 rounded-lg border"
             value={item.category}
@@ -160,6 +163,8 @@ export const ItemModal = ({
   />
   Uwzględnij w diagramie Gantta
 </label>
+</>
+)}
 
 {item.gantt && (
   <div className="grid grid-cols-2 gap-4 border-t pt-4">
@@ -221,21 +226,78 @@ export const ItemModal = ({
 )}
 
 {item.gantt && (
-  <div>
+<div className="bg-slate-50 p-3 rounded-xl border space-y-3">
 
-    <label className="text-xs font-semibold text-slate-500">
-      Liczba osób realizujących
+  {/* Osoba odpowiedzialna */}
+  <div>
+    <label className="text-[10px] font-bold text-slate-600 uppercase">
+      Osoba odpowiedzialna
     </label>
 
     <input
-      type="number"
-      min="1"
-      className="w-full p-2 border rounded"
-      value={item.teamSize}
-      onChange={(e)=>setItem({...item,teamSize:e.target.value})}
+      placeholder="Imię i nazwisko"
+      className="w-full p-2 rounded border"
+      value={item.assignee}
+      onChange={(e)=>
+        setItem({...item, assignee:e.target.value})
+      }
     />
+  </div>
+
+  {/* Zespół + Postęp */}
+  <div className="grid grid-cols-2 gap-3">
+
+    {/* Zespół */}
+    <div>
+
+      <label className="text-[10px] font-bold text-slate-600 uppercase">
+        Zespół (osób)
+      </label>
+
+      <input
+        type="number"
+        min="1"
+        className="w-full p-2 rounded border"
+        value={item.teamSize}
+        onChange={(e)=>
+          setItem({...item, teamSize:parseInt(e.target.value)})
+        }
+      />
+
+    </div>
+
+
+    {/* Postęp */}
+    <div>
+
+      <div className="flex justify-between items-center mb-1">
+
+        <label className="text-[10px] font-bold text-slate-600 uppercase">
+          Postęp
+        </label>
+
+        <span className="text-xs font-bold text-indigo-600">
+          {item.progress}%
+        </span>
+
+      </div>
+
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={item.progress}
+        onChange={(e)=>
+          setItem({...item, progress:parseInt(e.target.value)})
+        }
+        className="w-full"
+      />
+
+    </div>
 
   </div>
+
+</div>
 )}
 
           <select

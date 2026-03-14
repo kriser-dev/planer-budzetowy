@@ -85,6 +85,33 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('miesieczny');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
+  const changeMonth = (direction) => {
+
+  if (direction === "prev") {
+
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear(selectedYear - 1);
+    } else {
+      setSelectedMonth(selectedMonth - 1);
+    }
+
+  }
+
+  if (direction === "next") {
+
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear(selectedYear + 1);
+    } else {
+      setSelectedMonth(selectedMonth + 1);
+    }
+
+  }
+
+};
+  
   const [statusFilter, setStatusFilter] = useState('all');
   const [ganttMode,setGanttMode] = useState("month");
   const [initialized, setInitialized] = useState(false);
@@ -715,15 +742,19 @@ const handleSaveEdit = () => {
 		  
 		) : activeTab === 'gantt' ? (
 
-		  <GanttView
-			data={ganttItems}
-			selectedYear={selectedYear}
-			selectedMonth={selectedMonth}
-			months={months}
-			quarters={quarters}
-			ganttMode={ganttMode}
-			setGanttMode={setGanttMode}
-		  />  
+<GanttView
+  data={data}
+  selectedYear={selectedYear}
+  selectedMonth={selectedMonth}
+  months={months}
+  quarters={quarters}
+  onEdit={(id) => {
+    const item = data.find(d => d.id === id);
+
+    setModalMode("edit");
+    setModalItem(item);
+  }}
+/>
 		  
         ) : (
 		
