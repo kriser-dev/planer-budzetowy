@@ -152,6 +152,92 @@ export const ItemModal = ({
 
           </div>
 
+<label className="flex items-center gap-2 text-sm font-semibold">
+  <input
+    type="checkbox"
+    checked={item.gantt}
+    onChange={(e)=>setItem({...item,gantt:e.target.checked})}
+  />
+  Uwzględnij w diagramie Gantta
+</label>
+
+{item.gantt && (
+  <div className="grid grid-cols-2 gap-4 border-t pt-4">
+
+    <div className="bg-indigo-50 p-3 rounded-xl border">
+
+      <label className="text-[10px] font-bold text-indigo-600 uppercase">
+        Start plan
+      </label>
+
+      <input
+        type="date"
+        className="w-full p-2 border rounded"
+        value={item.startPlanned}
+        onChange={(e)=>setItem({...item,startPlanned:e.target.value})}
+      />
+
+      <label className="text-[10px] font-bold text-indigo-600 uppercase mt-2 block">
+        Koniec plan
+      </label>
+
+      <input
+        type="date"
+        className="w-full p-2 border rounded"
+        value={item.endPlanned}
+        onChange={(e)=>setItem({...item,endPlanned:e.target.value})}
+      />
+
+    </div>
+
+
+    <div className="bg-emerald-50 p-3 rounded-xl border">
+
+      <label className="text-[10px] font-bold text-emerald-600 uppercase">
+        Start real
+      </label>
+
+      <input
+        type="date"
+        className="w-full p-2 border rounded"
+        value={item.startReal}
+        onChange={(e)=>setItem({...item,startReal:e.target.value})}
+      />
+
+      <label className="text-[10px] font-bold text-emerald-600 uppercase mt-2 block">
+        Koniec real
+      </label>
+
+      <input
+        type="date"
+        className="w-full p-2 border rounded"
+        value={item.endReal}
+        onChange={(e)=>setItem({...item,endReal:e.target.value})}
+      />
+
+    </div>
+
+  </div>
+)}
+
+{item.gantt && (
+  <div>
+
+    <label className="text-xs font-semibold text-slate-500">
+      Liczba osób realizujących
+    </label>
+
+    <input
+      type="number"
+      min="1"
+      className="w-full p-2 border rounded"
+      value={item.teamSize}
+      onChange={(e)=>setItem({...item,teamSize:e.target.value})}
+    />
+
+  </div>
+)}
+
           <select
             className="w-full p-2.5 rounded-lg border"
             value={item.status}

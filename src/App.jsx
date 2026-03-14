@@ -20,6 +20,7 @@ import { MonthlyOperationsTable } from './components/views/MonthlyOperationsTabl
 import { SettingsView } from './components/views/SettingsView';
 import { QuarterlyView } from './components/views/QuarterlyView';
 import { YearlyView } from './components/views/YearlyView';
+import { GanttView } from './components/views/GanttView';
 import { ConfirmModal } from "./components/modals/ConfirmModal";
 import { CategoryMigrationModal } from "./components/modals/CategoryMigrationModal";
 
@@ -85,6 +86,7 @@ const App = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [statusFilter, setStatusFilter] = useState('all');
+  const [ganttMode,setGanttMode] = useState("month");
   const [initialized, setInitialized] = useState(false);
   const [orgName, setOrgName] = useState("");
 
@@ -410,6 +412,10 @@ const handleSaveEdit = () => {
     [data, fixedCostsRegistry, fixedCostOverrides, selectedYear]
   );
 
+  const ganttItems = useMemo(() => 
+    data.filter(item => item.gantt),
+  [data]);
+
   // Login
   if (!user) {
     if(showRegister){
@@ -584,6 +590,16 @@ const handleSaveEdit = () => {
               >
                 Rok
               </button>
+			  
+			  <button 
+                onClick={() => setActiveTab('gantt')} 
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'gantt' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-slate-100'
+                }`}
+              >
+				Gantt
+			  </button>
+			  
               <button 
                 onClick={() => setActiveTab('ustawienia')} 
                 className={`px-4 py-2 rounded-lg text-sm transition-all ${
@@ -696,7 +712,21 @@ const handleSaveEdit = () => {
             calculateStats={calculateStats}
             handlePrint={handlePrint}
           />
+		  
+		) : activeTab === 'gantt' ? (
+
+		  <GanttView
+			data={ganttItems}
+			selectedYear={selectedYear}
+			selectedMonth={selectedMonth}
+			months={months}
+			quarters={quarters}
+			ganttMode={ganttMode}
+			setGanttMode={setGanttMode}
+		  />  
+		  
         ) : (
+		
           <YearlyView 
             selectedYear={selectedYear}
             yearlyStats={yearlyStats}

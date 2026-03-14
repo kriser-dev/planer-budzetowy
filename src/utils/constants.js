@@ -54,7 +54,13 @@ export const emptyNewItem = {
   expensePlanned: '', 
   expenseReal: '', 
   status: 'planowane', 
-  link: '' 
+  link: '',
+  gantt: false,
+  startPlanned: "",
+  endPlanned: "",
+  startReal: "",
+  endReal: "",
+  teamSize: 1  
 };
 
 // Pusty nowy koszt stały
