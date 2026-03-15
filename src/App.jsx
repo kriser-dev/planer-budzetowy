@@ -748,11 +748,14 @@ const handleSaveEdit = () => {
   selectedMonth={selectedMonth}
   months={months}
   quarters={quarters}
-  onEdit={(id) => {
-    const item = data.find(d => d.id === id);
+  onEdit={(id, modeType = "edit") => {
 
-    setModalMode("edit");
+    const item = data.find(d => d.id === id);
+    if (!item) return;
+
+    setModalMode(modeType);
     setModalItem(item);
+
   }}
 />
 		  

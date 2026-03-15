@@ -13,23 +13,27 @@ export const ItemModal = ({
 
   if (!item) return null;
 
-  const isEdit = mode === "edit";
-  const ganttOnly = isEdit && item?.gantt;
+  const isEdit = mode === "edit" || mode === "ganttEdit";
+  const ganttOnly = mode === "ganttEdit";
 
   return (
     <div
       onClick={onClose}
       className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
     >
-      <div
-        onClick={(e)=>e.stopPropagation()}
-        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6"
-      >
-
-        <div className="flex justify-between items-center mb-4 border-b pb-2">
-          <h3 className="font-bold text-lg">
-            {isEdit ? "Edycja wpisu" : "Dodaj wpis"}
-          </h3>
+	  <div
+		onClick={(e)=>e.stopPropagation()}
+		className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
+	  >
+       <div className="max-h-[90vh] overflow-y-auto p-6">
+        <div className="flex justify-between items-center mb-4 border-b pb-2 sticky top-0 bg-white z-10">
+		  <h3 className="font-bold text-lg">
+			{mode === "ganttEdit"
+			  ? "Edycja zadania (Gantt)"
+			  : isEdit
+			  ? "Edycja wpisu"
+			  : "Dodaj wpis"}
+		  </h3>
 
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full">
             <X size={20}/>
@@ -167,6 +171,8 @@ export const ItemModal = ({
 )}
 
 {item.gantt && (
+  <div className="animate-fade-in">
+  
   <div className="grid grid-cols-2 gap-4 border-t pt-4">
 
     <div className="bg-indigo-50 p-3 rounded-xl border">
@@ -221,7 +227,7 @@ export const ItemModal = ({
       />
 
     </div>
-
+   </div>
   </div>
 )}
 
@@ -324,5 +330,6 @@ export const ItemModal = ({
         </div>
       </div>
     </div>
+	</div>
   );
 };

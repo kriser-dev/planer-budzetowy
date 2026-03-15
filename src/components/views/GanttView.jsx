@@ -273,7 +273,7 @@ if (realBar) {
 
 {/* PLAN */}
 <div
-  onClick={() => onEdit(task.id)}
+  onClick={() => onEdit(task.id, "ganttEdit")}
   className="absolute h-[16px] rounded cursor-pointer hover:brightness-110"
   style={{
 	left: leftPlan,
@@ -301,7 +301,7 @@ if (realBar) {
 {/* REAL */}
 {realBar && (
   <div
-    onClick={() => onEdit(task.id)}
+    onClick={() => onEdit(task.id, "ganttEdit")}
 	className="absolute h-[16px] rounded overflow-hidden cursor-pointer hover:brightness-110"
 	style={{
 	  left: leftReal,
