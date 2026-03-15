@@ -1,5 +1,4 @@
 import AppLogo from "../../components/ui/AppLogo";
-
 import { useState } from "react";
 import { auth } from "../../config/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";

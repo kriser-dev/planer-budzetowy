@@ -14,7 +14,7 @@ import { auth, db } from "./config/firebase";
 import { doc, setDoc } from 'firebase/firestore';
 
 // Importy komponentów
-import { ItemModal } from "./components/forms/ItemModal";
+import { ItemModal } from "./components/modals/ItemModal";
 import { MonthStatsCards } from './components/views/MonthStatsCards';
 import { MonthlyOperationsTable } from './components/views/MonthlyOperationsTable';
 import { SettingsView } from './components/views/SettingsView';
