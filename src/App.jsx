@@ -539,7 +539,7 @@ const handleSaveEdit = () => {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto">
+      <div className="w-full max-w-[1800px] mx-auto">
         {/* Modal wstawiania */}
 <ItemModal
   mode={modalMode}
