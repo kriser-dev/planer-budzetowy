@@ -1,5 +1,5 @@
 import React from 'react';
-import { Printer, PieChart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Printer, PieChart } from 'lucide-react';
 import { 
   AreaChart, 
   Area, 
@@ -17,59 +17,15 @@ export const QuarterlyView = ({
   selectedYear, 
   months, 
   calculateStats, 
-  handlePrint,
-  onPrevQuarter, // NOWY PROP
-  onNextQuarter  // NOWY PROP
+  handlePrint 
 }) => {
-
-  // Obliczenie sumarycznych statystyk dla całego kwartału
-  const quarterSummary = quarters[currentQuarterIdx].months.reduce((acc, mIdx) => {
-    const s = calculateStats(mIdx, selectedYear);
-    return {
-      przychodyReal: acc.przychodyReal + (s.przychodyReal || 0),
-      przychodyPlan: acc.przychodyPlan + (s.przychodyPlan || 0),
-      kosztyReal: acc.kosztyReal + (s.kosztyReal || 0),
-      kosztyPlan: acc.kosztyPlan + (s.kosztyPlan || 0),
-      wynikReal: acc.wynikReal + (s.wynikReal || 0)
-    };
-  }, {
-    przychodyReal: 0,
-    przychodyPlan: 0,
-    kosztyReal: 0,
-    kosztyPlan: 0,
-    wynikReal: 0
-  });
-
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="flex justify-between items-center no-print">
-        
-        {/* Zaktualizowana sekcja nagłówka z nawigacją */}
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onPrevQuarter}
-            disabled={currentQuarterIdx === 0}
-            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            aria-label="Poprzedni kwartał"
-          >
-            <ChevronLeft size={24} />
-          </button>
-          
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 min-w-[170px] justify-center">
-            {quarters[currentQuarterIdx].label} {selectedYear}
-            <InfoIcon text="Zbiorcze zestawienie wyników dla bieżącego kwartału z podziałem na plan i realizację." />
-          </h2>
-
-          <button 
-            onClick={onNextQuarter}
-            disabled={currentQuarterIdx === quarters.length - 1}
-            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            aria-label="Następny kwartał"
-          >
-            <ChevronRight size={24} />
-          </button>
-        </div>
-
+        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          {quarters[currentQuarterIdx].label} {selectedYear}
+          <InfoIcon text="Zbiorcze zestawienie wyników dla bieżącego kwartału z podziałem na plan i realizację." />
+        </h2>
         <button 
           onClick={handlePrint} 
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-md transition-colors hover:bg-indigo-700"
@@ -78,7 +34,6 @@ export const QuarterlyView = ({
         </button>
       </div>
       
-      {/* Zestawienie poszczególnych miesięcy */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {quarters[currentQuarterIdx].months.map((mIdx) => {
           const s = calculateStats(mIdx, selectedYear);
@@ -122,48 +77,6 @@ export const QuarterlyView = ({
         })}
       </div>
 
-      {/* Podsumowanie całego kwartału */}
-      <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm space-y-4">
-        <h4 className="font-bold text-indigo-500 uppercase text-[11px] mb-2 tracking-widest border-b pb-2">
-          Podsumowanie: {quarters[currentQuarterIdx].label}
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] font-bold text-emerald-700 uppercase">Przychody Całkowite</span>
-              <span className="text-[9px] text-emerald-600/60 font-medium">REAL vs PLAN</span>
-            </div>
-            <div className="flex justify-between items-baseline">
-              <span className="text-xl font-black text-emerald-600">+{quarterSummary.przychodyReal.toLocaleString()}</span>
-              <span className="text-xs text-emerald-400 font-mono">{quarterSummary.przychodyPlan.toLocaleString()}</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-red-50/50 rounded-xl border border-red-100">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] font-bold text-red-700 uppercase">Koszty Całkowite</span>
-              <span className="text-[9px] text-red-600/60 font-medium">REAL vs PLAN</span>
-            </div>
-            <div className="flex justify-between items-baseline">
-              <span className="text-xl font-black text-red-500">-{quarterSummary.kosztyReal.toLocaleString()}</span>
-              <span className="text-xs text-red-400 font-mono">{quarterSummary.kosztyPlan.toLocaleString()}</span>
-            </div>
-          </div>
-
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-center">
-             <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] font-bold text-slate-600 uppercase">Zysk Całkowity</span>
-            </div>
-            <div className="flex justify-end items-baseline mt-1">
-              <span className={`text-2xl font-black ${quarterSummary.wynikReal >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
-                {quarterSummary.wynikReal.toLocaleString()} zł
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Sekcja wykresu */}
       <section className="bg-white p-8 rounded-3xl border shadow-sm min-w-0">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-bold flex items-center gap-2 text-indigo-600">

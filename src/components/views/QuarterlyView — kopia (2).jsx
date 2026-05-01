@@ -1,5 +1,5 @@
 import React from 'react';
-import { Printer, PieChart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Printer, PieChart } from 'lucide-react';
 import { 
   AreaChart, 
   Area, 
@@ -17,9 +17,7 @@ export const QuarterlyView = ({
   selectedYear, 
   months, 
   calculateStats, 
-  handlePrint,
-  onPrevQuarter, // NOWY PROP
-  onNextQuarter  // NOWY PROP
+  handlePrint 
 }) => {
 
   // Obliczenie sumarycznych statystyk dla całego kwartału
@@ -43,33 +41,10 @@ export const QuarterlyView = ({
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="flex justify-between items-center no-print">
-        
-        {/* Zaktualizowana sekcja nagłówka z nawigacją */}
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onPrevQuarter}
-            disabled={currentQuarterIdx === 0}
-            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            aria-label="Poprzedni kwartał"
-          >
-            <ChevronLeft size={24} />
-          </button>
-          
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 min-w-[170px] justify-center">
-            {quarters[currentQuarterIdx].label} {selectedYear}
-            <InfoIcon text="Zbiorcze zestawienie wyników dla bieżącego kwartału z podziałem na plan i realizację." />
-          </h2>
-
-          <button 
-            onClick={onNextQuarter}
-            disabled={currentQuarterIdx === quarters.length - 1}
-            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            aria-label="Następny kwartał"
-          >
-            <ChevronRight size={24} />
-          </button>
-        </div>
-
+        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          {quarters[currentQuarterIdx].label} {selectedYear}
+          <InfoIcon text="Zbiorcze zestawienie wyników dla bieżącego kwartału z podziałem na plan i realizację." />
+        </h2>
         <button 
           onClick={handlePrint} 
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-md transition-colors hover:bg-indigo-700"
@@ -122,7 +97,7 @@ export const QuarterlyView = ({
         })}
       </div>
 
-      {/* Podsumowanie całego kwartału */}
+      {/* NOWA SEKCJA: Podsumowanie całego kwartału */}
       <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-sm space-y-4">
         <h4 className="font-bold text-indigo-500 uppercase text-[11px] mb-2 tracking-widest border-b pb-2">
           Podsumowanie: {quarters[currentQuarterIdx].label}

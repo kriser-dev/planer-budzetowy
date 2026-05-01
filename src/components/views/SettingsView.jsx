@@ -28,7 +28,9 @@ export const SettingsView = ({
   changePassword,
   data,
   setConfirmData,
-  setCategoryMigration
+  setCategoryMigration,
+  setOrgName,
+  updateOrganizationName
 }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4">
@@ -207,6 +209,39 @@ return;
       
       <OrganizationUsers />
       
+{role === "admin" && (
+<section className="bg-white p-8 rounded-2xl shadow-sm border">
+  <div className="flex items-center mb-6">
+    <h2 className="text-xl font-bold text-indigo-600">
+      Organizacja
+    </h2>
+  </div>
+
+  <div className="space-y-3">
+
+    <label className="text-sm text-slate-500 font-semibold">
+      Nazwa organizacji
+    </label>
+
+    <div className="flex gap-2">
+      <input
+        className="flex-1 p-2.5 rounded-lg border text-sm"
+        value={orgName || ""}
+        onChange={(e)=>setOrgName(e.target.value)}
+      />
+
+      <button
+        onClick={updateOrganizationName}
+        className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700"
+      >
+        Zapisz
+      </button>
+    </div>
+
+  </div>
+</section>
+)}	  
+	  
       <section className="bg-white p-8 rounded-2xl shadow-sm border">
         <div className="flex items-center mb-6">
           <h2 className="text-xl font-bold text-indigo-600">
@@ -220,10 +255,10 @@ return;
             <span className="font-mono">{user?.email}</span>
           </div>
 
-          <div className="flex justify-between border-b pb-2">
-            <span className="text-slate-500">Organizacja</span>
-            <span className="font-bold">{orgName || "ładowanie..."}</span>
-          </div>
+<div className="flex justify-between border-b pb-2">
+  <span className="text-slate-500">Organizacja</span>
+  <span className="font-bold">{orgName || "ładowanie..."}</span>
+</div>
 
           <div className="flex justify-between">
             <span className="text-slate-500">Rola</span>

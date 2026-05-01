@@ -110,7 +110,21 @@ const App = () => {
 
   }
 
-};
+  };
+  
+  const handlePrevQuarter = () => {
+    if (currentQuarterIdx > 0) {
+      // Ustawia pierwszy miesiąc poprzedniego kwartału
+      setSelectedMonth((currentQuarterIdx - 1) * 3);
+    }
+  };
+
+  const handleNextQuarter = () => {
+    if (currentQuarterIdx < 3) {
+      // Ustawia pierwszy miesiąc następnego kwartału
+      setSelectedMonth((currentQuarterIdx + 1) * 3);
+    }
+  };
   
   const [statusFilter, setStatusFilter] = useState('all');
   const [ganttMode,setGanttMode] = useState("month");
@@ -314,6 +328,32 @@ const App = () => {
 
     setInviteEmail("");
   };
+
+const updateOrganizationName = async () => {
+
+  if(!orgName?.trim()){
+    alert("Podaj nazwę organizacji");
+    return;
+  }
+
+  try{
+
+    await setDoc(
+      doc(db,"organizations",orgId),
+      {
+        name: orgName
+      },
+      { merge:true }
+    );
+
+    alert("Nazwa organizacji została zapisana");
+
+  }catch(err){
+    console.error("ORG UPDATE ERROR:", err);
+    alert("Błąd zapisu nazwy organizacji");
+  }
+
+};
 
   const deleteMonthItem = (item) => {
     if (item.isFixed) {
@@ -670,6 +710,8 @@ const handleSaveEdit = () => {
 			data={data}
 			setConfirmData={setConfirmData}
 			setCategoryMigration={setCategoryMigration}
+			setOrgName={setOrgName}
+			updateOrganizationName={updateOrganizationName}
           />
         ) : activeTab === 'miesieczny' ? (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -730,7 +772,7 @@ const handleSaveEdit = () => {
 />
             </div>
           </div>
-        ) : activeTab === 'kwartalny' ? (
+) : activeTab === 'kwartalny' ? (
           <QuarterlyView 
             quarters={quarters}
             currentQuarterIdx={currentQuarterIdx}
@@ -738,6 +780,8 @@ const handleSaveEdit = () => {
             months={months}
             calculateStats={calculateStats}
             handlePrint={handlePrint}
+            onPrevQuarter={handlePrevQuarter} // DODANE
+            onNextQuarter={handleNextQuarter} // DODANE
           />
 		  
 		) : activeTab === 'gantt' ? (
