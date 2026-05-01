@@ -81,8 +81,8 @@ export const SettingsView = ({
           {fixedCostsRegistry.map(cost => (
             <div key={cost.id} className="flex justify-between items-center p-3 border rounded-xl hover:bg-slate-50 transition-colors">
               <div className="flex flex-col">
-                <span className="font-bold text-slate-700 text-sm">{cost.category}</span>
-                <span className="text-[10px] text-slate-400">{cost.description}</span>
+                <span className="font-bold text-slate-700 text-sm">{cost.description}</span>
+                <span className="text-[10px] text-slate-400">{cost.category}</span>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-mono text-red-500">-{cost.amount.toLocaleString()} zł</span>
