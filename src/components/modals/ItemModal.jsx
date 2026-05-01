@@ -6,6 +6,7 @@ export const ItemModal = ({
   item,
   setItem,
   categories,
+  months, // <-- DODANE
   monthError,
   onSave,
   onClose
@@ -21,19 +22,19 @@ export const ItemModal = ({
       onClick={onClose}
       className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
     >
-	  <div
-		onClick={(e)=>e.stopPropagation()}
-		className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
-	  >
+      <div
+        onClick={(e)=>e.stopPropagation()}
+        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
+      >
        <div className="max-h-[90vh] overflow-y-auto p-6">
         <div className="flex justify-between items-center mb-4 border-b pb-2 sticky top-0 bg-white z-10">
-		  <h3 className="font-bold text-lg">
-			{mode === "ganttEdit"
-			  ? "Edycja zadania (Gantt)"
-			  : isEdit
-			  ? "Edycja wpisu"
-			  : "Dodaj wpis"}
-		  </h3>
+          <h3 className="font-bold text-lg">
+            {mode === "ganttEdit"
+              ? "Edycja zadania (Gantt)"
+              : isEdit
+              ? "Edycja wpisu"
+              : "Dodaj wpis"}
+          </h3>
 
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-full">
             <X size={20}/>
@@ -41,11 +42,11 @@ export const ItemModal = ({
         </div>
 
         <div
-		  className="space-y-3"
-		  onKeyDown={(e)=>{
-			if(e.key==="Enter") onSave();
-		  }}
-		>
+          className="space-y-3"
+          onKeyDown={(e)=>{
+            if(e.key==="Enter") onSave();
+          }}
+        >
 
 {!ganttOnly && (
 <>
@@ -66,6 +67,26 @@ export const ItemModal = ({
             value={item.description}
             onChange={(e)=>setItem({...item,description:e.target.value})}
           />
+
+          {/* NOWE POLE: Przenoszenie wpisu do innego miesiąca */}
+          {mode === 'edit' && !item.isFixed && months && (
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">
+                Przypisany miesiąc
+              </label>
+              <select
+                value={item.month}
+                onChange={(e) => setItem({ ...item, month: parseInt(e.target.value) })}
+                className="w-full p-2.5 rounded-lg border bg-slate-50 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              >
+                {months.map((monthName, idx) => (
+                  <option key={idx} value={idx}>
+                    {monthName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* LINK FIELD */}
           <div className="flex items-center gap-2">
@@ -321,7 +342,7 @@ export const ItemModal = ({
 
           <button
             onClick={onSave}
-            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"
+            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition"
           >
             {isEdit ? <Save size={18}/> : <Plus size={18}/>}
             {isEdit ? "Zapisz zmiany" : "Dodaj wpis"}
@@ -330,6 +351,6 @@ export const ItemModal = ({
         </div>
       </div>
     </div>
-	</div>
+    </div>
   );
 };

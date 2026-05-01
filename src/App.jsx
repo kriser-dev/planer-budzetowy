@@ -586,6 +586,7 @@ const handleSaveEdit = () => {
   item={modalItem}
   setItem={setModalItem}
   categories={categories}
+  months={months}
   monthError={monthError}
   onClose={()=>{
     setModalMode(null);
